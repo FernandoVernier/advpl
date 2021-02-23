@@ -1,2 +1,2 @@
-# advpl
-Projetos em ADVPL desenvolvidos ao longo da carreira de programador, os fontes aqui compartilhados são livres para serem reproduzidos.
+# ADVPL
+Projetos ADVPL que desenvolvi ao longo da minha carreira como Dev, espero contribuir com a comunidade.
