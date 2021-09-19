@@ -1,0 +1,515 @@
+#Include 'Protheus.ch'
+#Include 'FWMVCDef.ch'
+#Include "RWMAKE.CH"
+#Include "TOPCONN.CH"
+#Include "VKEY.Ch"
+
+//Variáveis Estáticas
+Static cTitulo := "Manutenção de Cobrança"
+
+/*/{Protheus.doc} MntCob
+Função para cadastro de Composição de CDs (Exemplo de Modelo 3 - PW3 x PW4)
+@author Fernando Vernier
+@since 03/09/2016
+@version 1.0
+	@return Nil, Função não tem retorno
+	@example
+	u_MntCob()
+/*/
+
+User Function MntCob(cIdNeg)
+	Local aArea   := GetArea()
+	Local oBrowse
+	Local  cFunBkp   := FunName()
+	Private __lCopia := .F.
+	__nOper := 0	
+
+	//Instânciando FWMBrowse - Somente com dicionário de dados
+	oBrowse := FWMBrowse():New()
+	
+	//Setando a tabela de cadastro de CDs
+	oBrowse:SetAlias("PW3")
+
+	//Setando a descrição da rotina
+	oBrowse:SetDescription(cTitulo)
+
+    oBrowse:SetFilterDefault( "PW3_IDNEG == '" + PW3->PW3_IDNEG + "' ")
+
+	// A=Em Aberto;B=Faturado Parcial;C=Faturado Total;D=Cancelado;E=Encerrado Parcial;F=Encerrado Total                               
+	/*
+	GREEN – Para a cor Verde
+	RED – Para a cor Vermelha
+	YELLOW – Para a cor Amarela
+	ORANGE – Para a cor Laranja
+	BLUE – Para a cor Azul
+	GRAY – Para a cor Cinza
+	BROWN – Para a cor Marrom
+	BLACK – Para a cor Preta
+	PINK – Para a cor Rosa
+	WHITE – Para a cor Branca
+	VIOLET – Para a cor Violeta
+	*/
+
+	If GetNewPar("MV_XEMPCB",2)	== 1 // 1 fcommit()
+		oBrowse:AddLegend( "PW3->PW3_STAT = '1'", "RED"	    ,    "Liquidado" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '2'", "VIOLET"  ,    "Juridico" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '3'", "PINK"	,    "Cheque Custódia" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '4'", "GREEN"	,    "Contactado" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '5'", "BLACK"	,    "Negativado" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '6'", "BLUE"	,    "Liquidado Parcial" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '7'", "ORANGE"	,    "Em Andamento" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '8'", "WHITE"	,    "Negociado" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = 'C'", "GRAY"	,    "Cancelada" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = 'E'", "YELLOW"	,    "Encerrada" )
+	ElseIf GetNewPar("MV_XEMPCB",2)	== 2 // 2 Grupo
+		oBrowse:AddLegend( "PW3->PW3_STAT = '1'", "RED"	    ,    "Liquidado" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '2'", "VIOLET"  ,    "Cobrança Extrajudicial" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '3'", "PINK"	,    "Cobrança Externalizada" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '4'", "GREEN"	,    "Contactado" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '5'", "BLACK"	,    "Cliente Negativado" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '6'", "BLUE"	,    "Liquidado Parcial" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '7'", "ORANGE"	,    "Cobrança em Andamento" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = '8'", "WHITE"	,    "Decisão Comitê Estratégico" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = 'C'", "GRAY"	,    "Negociação Cancelada" )
+		oBrowse:AddLegend( "PW3->PW3_STAT = 'E'", "YELLOW"	,    "Negociação Encerrada" )
+	Endif
+
+	//Ativa a Browse
+	oBrowse:Activate()
+	
+	SetFunName(cFunBkp)
+	RestArea(aArea)
+Return Nil
+
+/*---------------------------------------------------------------------*
+ | Func:  MenuDef                                                      |
+ | Autor: Daniel Atilio                                                |
+ | Data:  03/09/2016                                                   |
+ | Desc:  Criação do menu MVC                                          |
+ *---------------------------------------------------------------------*/
+
+Static Function MenuDef()
+	Local aRot := {}
+	
+	//Adicionando opções
+	ADD OPTION aRot TITLE 'Visualizar' 			 ACTION 'VIEWDEF.MntCob' 			OPERATION MODEL_OPERATION_VIEW   ACCESS 0 //OPERATION 1
+	ADD OPTION aRot TITLE 'Gestão'    			 ACTION 'VIEWDEF.MntCob' 			OPERATION MODEL_OPERATION_INSERT ACCESS 0 //OPERATION 3
+
+Return aRot
+
+/*---------------------------------------------------------------------*
+ | Func:  ModelDef                                                     |
+ | Autor: Daniel Atilio                                                |
+ | Data:  03/09/2016                                                   |
+ | Desc:  Criação do modelo de dados MVC                               |
+ *---------------------------------------------------------------------*/
+
+Static Function ModelDef()
+	Local oModel 		:= Nil
+	Local oStPai 		:= FWFormStruct(1, 'PW3')
+	Local oStFilho 		:= FWFormStruct(1, 'PW4')
+	Local aPW4Rel		:= {}
+	Local bLinePre 		:= {|oGridModel, nLine, cAction, cIDField, xValue, xCurrentValue| fLinOk(oGridModel, nLine, cAction, cIDField, xValue, xCurrentValue)}
+	//Local bLinePos 		:= {|oGridModel, nLine, cAction, cIDField, xValue, xCurrentValue| fLPosOk(oGridModel, nLine, cAction, cIDField, xValue, xCurrentValue)}
+	
+	//Definições dos campos
+	oStPai:SetProperty('PW3_IDNEG',     MODEL_FIELD_INIT,    FwBuildFeature(STRUCT_FEATURE_INIPAD,  'GetSXENum("PW3", "PW3_IDNEG")'))       	//Ini Padrão	
+	oStPai:SetProperty('PW3_IDNEG',     MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_EMISSA',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_CLIENT',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_LOJA',      MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_GRPCLI',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_NTITU',     MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_FORDES',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_TOTORI',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_TOTNEG',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_TOTREC',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_PARCEL',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_VLRPAR',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_DTCANC',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_HRCANC',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_TXTCAN',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_DTENC' ,    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_HRENC' ,    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStPai:SetProperty('PW3_TXTENC',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+    oStPai:SetProperty('PW3_TXJUR' ,    MODEL_FIELD_VALID,   FWBuildFeature(STRUCT_FEATURE_VALID,"U_fCobCalcJur(FWFldGet('PW3_VENCTO'))"))
+    oStPai:SetProperty('PW3_VENCTO',    MODEL_FIELD_VALID,   FWBuildFeature(STRUCT_FEATURE_VALID,"U_fCobCalcJur(FWFldGet('PW3_VENCTO'))"))
+
+	If PW3->PW3_STAT $ 'CE'	// Cancelada ou Encerrada, Não Pode Mexer em Nada
+		oStPai:SetProperty('PW3_TXJUR',     MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+		oStPai:SetProperty('PW3_FORMA',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+		oStPai:SetProperty('PW3_OBSER',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+		oStPai:SetProperty('PW3_VENCTO',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	Endif
+
+	oStFilho:SetProperty('PW4_STAT',        MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_PREFIX',      MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_NUM',         MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_PARCEL',      MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_TIPO',        MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_EMISSA',      MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_VENCTO',      MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_VENCRE',      MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_VALOR',       MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_SALDO',       MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_VALLIQ',      MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	oStFilho:SetProperty('PW4_VLRCOR',      MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+    oStFilho:SetProperty('PW4_VENNEW',      MODEL_FIELD_VALID,   FWBuildFeature(STRUCT_FEATURE_VALID,"U_fCobCalcJur(FWFldGet('PW4_VENNEW'),2)"))
+
+	If PW3->PW3_STAT $ 'CE'	// Cancelada ou Encerrada, Não Pode Mexer em Nada
+		oStFilho:SetProperty('PW4_VENNEW',    MODEL_FIELD_WHEN,    FwBuildFeature(STRUCT_FEATURE_WHEN,    '.F.'))                                 //Modo de Edição
+	Endif
+
+	//Criando o modelo e os relacionamentos
+	//oModel := MPFormModel():New('MntCobM',{|oMdl| VldPre( oMdl ) },{|oMdl| VldExc( oMdl ) }/*bPos*/,/*bCommit*/,/*bCancel*/)
+	oModel := MPFormModel():New('MntCobM',,/*bPos*/, { |oModel| fGrava(oModel)}/*bCommit*/,/*bCancel*/)
+	oModel:AddFields('PW3MASTER',/*cOwner*/,oStPai)
+	oModel:AddGrid('PW4DETAIL','PW3MASTER',oStFilho, bLinePre,/*bLinePost*/,/*bPre - Grid Inteiro*/,/*bPos - Grid Inteiro*/,/*bLoad - Carga do modelo manualmente*/)  //cOwner é para quem pertence
+	
+	//Fazendo o relacionamento entre o Pai e Filho
+	aAdd(aPW4Rel, {'PW4_FILIAL','PW3_FILIAL'} )
+	aAdd(aPW4Rel, {'PW4_IDNEG',	'PW3_IDNEG'})
+	
+	oModel:SetRelation('PW4DETAIL', aPW4Rel, PW4->(IndexKey(1))) //IndexKey -> quero a ordenação e depois filtrado
+	oModel:GetModel('PW4DETAIL'):SetUniqueLine({'PW4_FILORI','PW4_PREFIX',"PW4_NUM",'PW4_PARCEL','PW4_TIPO'})	//Não repetir informações ou combinações {"CAMPO1","CAMPO2","CAMPOX"}
+	oModel:SetPrimaryKey({})
+
+    oModel:GetModel("PW4DETAIL"):SetNoInsertLine(.T.)
+	
+	//Setando as descrições
+	oModel:SetDescription("Negociação")
+	oModel:GetModel('PW3MASTER'):SetDescription('Negociação')
+	oModel:GetModel('PW4DETAIL'):SetDescription('Titulos Negociados')
+
+	//Adicionando totalizadores
+	oModel:AddCalc('TOT_SALDO', 'PW3MASTER', 'PW4DETAIL', 'PW4_VALOR',  'XX_TOTA1', 'SUM', , , "Total Original:" )
+	oModel:AddCalc('TOT_SALDO', 'PW3MASTER', 'PW4DETAIL', 'PW4_VLRCOR', 'XX_TOTA2', 'SUM', , , "Total Corrigido:" )
+	oModel:AddCalc('TOT_SALDO', 'PW3MASTER', 'PW4DETAIL', 'PW4_VALLIQ', 'XX_TOTA3', 'SUM', , , "Total Recebido:" )
+Return oModel
+
+/*---------------------------------------------------------------------*
+ | Func:  ViewDef                                                      |
+ | Autor: Daniel Atilio                                                |
+ | Data:  03/09/2016                                                   |
+ | Desc:  Criação da visão MVC                                         |
+ *---------------------------------------------------------------------*/
+
+Static Function ViewDef()
+	Local oView			:= Nil
+	Local oModel		:= FWLoadModel('MntCob')
+	Local oStPai		:= FWFormStruct(2, 'PW3')
+	Local oStFilho		:= FWFormStruct(2, 'PW4')
+	Local oStTot		:= FWCalcStruct(oModel:GetModel('TOT_SALDO'))
+	
+	//Criando a View
+	oView := FWFormView():New()
+	oView:SetModel(oModel)
+	
+	//Adicionando os campos do cabeçalho e o grid dos filhos
+	oView:AddField('VIEW_PW3',oStPai,'PW3MASTER')
+	oView:AddGrid('VIEW_PW4',oStFilho,'PW4DETAIL')
+	oView:AddField('VIEW_TOT', oStTot,'TOT_SALDO')
+
+	// Adiciona Opcoes no Acoes Relacionadas da Tela
+
+	oView:AddUserButton("Histórico","",{|oView| U_Histor(0,0,0,PW3->PW3_IDNEG) })
+
+	//Setando o dimensionamento de tamanho
+	oView:CreateHorizontalBox('CABEC',40)
+	oView:CreateHorizontalBox('GRID',50)
+	oView:CreateHorizontalBox('TOTAL',10)
+	
+	//Amarrando a view com as box
+	oView:SetOwnerView('VIEW_PW3','CABEC')
+	oView:SetOwnerView('VIEW_PW4','GRID')
+	oView:SetOwnerView('VIEW_TOT','TOTAL')
+	
+	//Habilitando título
+	oView:EnableTitleView('VIEW_PW3','Negociação')
+	oView:EnableTitleView('VIEW_PW4','Titulos Negociados')
+
+	//oView:AddIncrementField('VIEW_PW4' , 'PW4_ITEM' )
+	
+	//Força o fechamento da janela na confirmação
+	oView:SetCloseOnOk({||.T.})
+
+	//Remove os campos de Código do Artista e CD
+
+	oStPai:RemoveField('PW3_CODOPE')
+	oStPai:RemoveField('PW3_NOMOPE')
+	oStPai:RemoveField('PW3_DTRET')
+	oStPai:RemoveField('PW3_HRRET')
+	oStPai:RemoveField('PW3_RESHIS')
+	oStPai:RemoveField('PW3_DTULIG')
+	oStPai:RemoveField('PW3_HRULIG')
+
+	oStFilho:RemoveField('PW4_IDNEG')
+	oStFilho:RemoveField('PW4_CLIENT')
+	oStFilho:RemoveField('PW4_LOJA')
+	oStFilho:RemoveField('PW4_SITUAC')
+
+	//oView:SetViewProperty( 'VIEW_PW4', "ENABLEDCOPYLINE",  {VK_F12} )	
+Return oView
+
+
+
+/*
+ÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜ
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+±±ÉÍÍÍÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍ»±±
+±±ºPrograma  ³ SaldoMae º Autor  ³ Luiz Alberto      º Data ³  03/05/2021 º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºDesc.     ³ Efetua o Recalculo dos Saldos dos Pedidos Maes Indicados   º±±
+±±º          ³                                                            º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºUso       ³                                                            º±±
+±±ÈÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼±±
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+ßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßß
+*/
+Static Function VldExc( oModel )    
+   	Local nOperation := oModel:GetOperation()
+   	Local lRet := .T.        
+   	If ( nOperation == MODEL_OPERATION_DELETE .And. FwFldGet("PW3_STAT") <> "A" )
+      	Help( ,, "HELP","VldExc", "Não é permitida exclusão de Pedidos Mãe, Com Status Diferente de Aberto !", 1, 0)      
+      	lRet := .F.
+	ElseIf ( nOperation == MODEL_OPERATION_UPDATE )
+		oModel:GetModel("PW3MASTER"):LoadValue("PW3_USUALT"	, __cUserId )
+		oModel:GetModel("PW3MASTER"):LoadValue("PW3_USUNAL"	, Left(USRFULLNAME( __CUSERID ),20) )
+		oModel:GetModel("PW3MASTER"):LoadValue("PW3_DTALT"	, dDataBase )
+		oModel:GetModel("PW3MASTER"):LoadValue("PW3_HRALT"	, Time() )
+	ElseIf ( nOperation == MODEL_OPERATION_INSERT )
+		oModel:GetModel("PW3MASTER"):LoadValue("PW3_USUINC"	, __cUserId )
+		oModel:GetModel("PW3MASTER"):LoadValue("PW3_USUINO"	, Left(USRFULLNAME( __CUSERID ),20) )
+		oModel:GetModel("PW3MASTER"):LoadValue("PW3_DATA"	, dDataBase )
+		oModel:GetModel("PW3MASTER"):LoadValue("PW3_HORA"	, Time() )
+   	EndIf
+
+	cCondPag := oModel:GetModel("PW3MASTER"):GetValue("PW3_COND")
+	If SE4->(dbSetOrder(1), dbSeek(xFilial("SE4")+cCondPag))
+		If (nOperation == MODEL_OPERATION_UPDATE .Or. nOperation == MODEL_OPERATION_INSERT) .And. SE4->E4_TIPO == '9' .And. AllTrim(SE4->E4_COND)=='%'
+			Help( ,, "HELP","VldExc","VldExc", "Atenção, Ao Utilizar a Condição de Pagamento Tipo 9, Favor Não Selecionar Com a Regra de (%) Percentual, Apenas (0) Valores !!!", 1, 0)      
+			lRet := .F.
+		Endif
+	Endif
+
+Return( lRet )
+
+
+/*
+ÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜ
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+±±ÉÍÍÍÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍ»±±
+±±ºPrograma  ³ SaldoMae º Autor  ³ Luiz Alberto      º Data ³  03/05/2021 º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºDesc.     ³ Efetua o Recalculo dos Saldos dos Pedidos Maes Indicados   º±±
+±±º          ³                                                            º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºUso       ³                                                            º±±
+±±ÈÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼±±
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+ßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßß
+*/
+Static Function VldPre( oModel )    
+Local nOperation := oModel:GetOperation()
+Local lRet := .T.        
+
+If ( nOperation == MODEL_OPERATION_UPDATE .And. FwFldGet("PW3_STAT") $ "CD" )
+	Help( ,, "HELP","VldPre", "Não é permitida Alteração de Pedidos Mães, Canceladous e/ou Encerrados Totalmente !", 1, 0)      
+	lRet := .F.
+EndIf
+Return( lRet )
+
+/*
+ÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜ
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+±±ÉÍÍÍÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍ»±±
+±±ºPrograma  ³ SaldoMae º Autor  ³ Luiz Alberto      º Data ³  03/05/2021 º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºDesc.     ³ Efetua o Recalculo dos Saldos dos Pedidos Maes Indicados   º±±
+±±º          ³                                                            º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºUso       ³                                                            º±±
+±±ÈÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼±±
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+ßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßß
+*/
+Static Function fLinOk(oGrid, nLine, cAction, cIDField, xValue, xCurrentValue)
+Local oModel      	:= FwModelActive()
+Local nOperation 	:= oModel:GetOperation()
+Local nLinha		:= oGrid:nLine
+Local lRet			:= .T.
+
+oGrid:GoLine(oGrid:nLine)
+nReg		:= oModel:GetModel("PW4DETAIL"):GetDataId()
+
+If cAction == 'DELETE' .And. !(oGrid:IsDeleted()) .And. !Empty(nReg) .And. !PW3->PW3_STAT $ 'CE'
+    SE1->(dbGoTo(nReg))
+    If SE1->(FieldPos("E1_IDNEG")) > 0   // Grupo 3778
+        If RecLock("SE1",.F.)
+            SE1->E1_IDNEG := ''
+            SE1->E1_VCNEG := CtoD('')
+            SE1->(MsUnlock())
+        Endif
+    Endif
+
+    If SE1->(FieldPos("E1_XRENEG")) > 0   // fcommit()
+        If RecLock("SE1",.F.)
+            SE1->E1_IDNEG := ''
+            SE1->E1_XRENEG := ''
+            SE1->E1_XVCRENG := CtoD('')
+            SE1->(MsUnlock())
+        Endif
+    Endif
+Endif
+Return lRet
+
+/*
+ÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜÜ
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+±±ÉÍÍÍÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍËÍÍÍÍÍÍÑÍÍÍÍÍÍÍÍÍÍÍÍÍ»±±
+±±ºPrograma  ³ SaldoMae º Autor  ³ Luiz Alberto      º Data ³  03/05/2021 º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÊÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºDesc.     ³ Efetua o Recalculo dos Saldos dos Pedidos Maes Indicados   º±±
+±±º          ³                                                            º±±
+±±ÌÍÍÍÍÍÍÍÍÍÍØÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¹±±
+±±ºUso       ³                                                            º±±
+±±ÈÍÍÍÍÍÍÍÍÍÍÏÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍÍ¼±±
+±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±±
+ßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßßß
+*/
+User Function fCobCalcJur(dDataVenc,nTipo)
+Local aArea 		:= GetArea()
+
+    MsAguarde({|| Cob_ClcJur(dDataVenc,nTipo)},"Aguarde...","Efetuando Correção...")
+
+RestArea(aArea)
+Return .T.
+
+Static Function Cob_ClcJur(dDataVenc,nTipo)
+Local aArea 		:= GetArea()
+Local oView         := FWViewActive()
+Local oModel 		:= FWModelActive() 
+Local oModelCabe 	:= oModel:GetModel( "PW3MASTER" )
+Local oModelGrid 	:= oModel:GetModel( "PW4DETAIL" )
+Local oModelRoda 	:= oModel:GetModel( "TOT_SALDO" )
+Local nLinha      	:= oModelGrid:nLine
+Local nSldPrev 		:= 0.00
+
+DEFAULT nTipo := 1
+
+If nTipo == 1
+    nLinPos := 1
+    nLinFim := oModelGrid:GoLine(oModelGrid:Length())
+ElseIf nTipo == 2
+    nLinPos := nLinha
+    nLinFim := nLinha
+Endif
+
+nTxJur      := oModelCabe:GetValue("PW3_TXJUR")
+nPerJuros   := nTxJur //GetNewPar("CD_TXPER",0.00)
+nValOri     := 0.00
+nValNeg     := 0.00
+nValRec     := 0.00
+
+For nTitulo := nLinPos To nLinFim
+    nLine := oModelGrid:GoLine(nTitulo)
+
+    If !oModelGrid:IsDeleted(nLine)
+        dVencRea        :=  oModelGrid:GetValue("PW4_VENCRE", nLine)
+
+        nTitSaldo       :=  oModelGrid:GetValue("PW4_SALDO", nLine)
+        nValCorrigido   :=  0.00
+        nDiasCorr       :=  (dDataVenc-dVencRea)
+
+        nValCorrigido := nTitSaldo * (((1 + (nPerJuros/100))) ^ (nDiasCorr/30))
+
+        oModelGrid:LoadValue("PW4_VENNEW" 	 , dDataVenc )
+        oModelGrid:LoadValue("PW4_TXJUR" 	 , nPerJuros )
+        oModelGrid:LoadValue("PW4_VLRCOR" 	 , nValCorrigido )
+    Endif
+Next nTitulo
+
+// Efetua Somatoria Geral
+
+For nTitulo := 1 To oModelGrid:GoLine(oModelGrid:Length())
+    nLine := oModelGrid:GoLine(nTitulo)
+
+    If !oModelGrid:IsDeleted(nLine)
+        nTitOri         :=  oModelGrid:GetValue("PW4_VALOR", nLine)
+        nTitLiqui       :=  oModelGrid:GetValue("PW4_VALLIQ", nLine)
+        nValCorrigido   :=  oModelGrid:GetValue("PW4_VLRCOR", nLine)
+
+        nValOri     += nTitOri
+        nValNeg     += nValCorrigido
+        nValRec     += nTitLiqui
+    Endif
+Next nTitulo
+
+oModelCabe:LoadValue("PW3_TOTORI" 	 , nValOri )
+oModelCabe:LoadValue("PW3_TOTNEG" 	 , nValNeg )
+oModelCabe:LoadValue("PW3_TOTREC" 	 , nValRec )
+
+oModelRoda:LoadValue("XX_TOTA1" 	 , nValOri )
+oModelRoda:LoadValue("XX_TOTA2" 	 , nValNeg )
+oModelRoda:LoadValue("XX_TOTA3" 	 , nValRec )
+
+RestArea(aArea)
+SysRefresh()
+oModelGrid:GoLine(1)
+oView:Refresh('VIEW_PW4')
+oView:Refresh('VIEW_PW3')
+oView:Refresh('VIEW_TOT')
+Return .T.
+
+
+
+Static Function fGrava(oModel)
+Local aArea			:= GetArea()
+
+If FWFormCommit( oModel ) .And. !PW3->PW3_STAT $ "CE"
+        
+    Begin Transaction
+
+    If SE1->(FieldPos("E1_XRENEG")) > 0 // fcommit()
+        If PW4->(dbSetOrder(1), dbSeek(xFilial("PW4")+PW3->PW3_IDNEG))
+            While PW4->(!Eof()) .And. PW4->PW4_FILIAL == xFilial("PW4") .And. PW4->PW4_IDNEG == PW3->PW3_IDNEG
+
+                // Atualiza Titulo no Financeiro
+
+                If SE1->(dbSetOrder(2), dbSeek(xFilial("SE1")+PW4->PW4_CLIENT+PW4->PW4_LOJA+PW4->PW4_PREFIX+PW4->PW4_NUM+PW4->PW4_PARCEL))
+                    If RecLock("SE1",.F.)
+                        SE1->E1_XRENEG := 'S'
+                        SE1->E1_XVCRENG :=	PW4->PW4_VENNEW
+                        SE1->E1_IDNEG 	:= PW4->PW4_IDNEG
+                        SE1->(MsUnlock())
+                    Endif
+                Endif
+
+                PW4->(dbSkip(1))
+            Enddo
+        Endif
+    Endif
+
+    If SE1->(FieldPos("E1_IDNEG")) > 0	// Grupo 3778
+        If PW4->(dbSetOrder(1), dbSeek(xFilial("PW4")+PW3->PW3_IDNEG))
+            While PW4->(!Eof()) .And. PW4->PW4_FILIAL == xFilial("PW4") .And. PW4->PW4_IDNEG == PW3->PW3_IDNEG
+
+                // Atualiza Titulo no Financeiro
+
+                If SE1->(dbSetOrder(2), dbSeek(xFilial("SE1")+PW4->PW4_CLIENT+PW4->PW4_LOJA+PW4->PW4_PREFIX+PW4->PW4_NUM+PW4->PW4_PARCEL+PW4->PW4_TIPO))
+                    If RecLock("SE1",.F.)
+                        SE1->E1_IDNEG 	:= PW4->PW4_IDNEG
+                        SE1->E1_VCNEG	:= PW4->PW4_VENNEW
+                        SE1->(MsUnlock())
+                    Endif
+                Endif
+
+                PW4->(dbSkip(1))
+            Enddo
+        Endif
+    Endif
+    End Transaction
+Endif
+RestArea(aArea)
+Return .T.
